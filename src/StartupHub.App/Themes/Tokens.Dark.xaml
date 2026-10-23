@@ -1,0 +1,10 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+ <Color x:Key="CanvasColor">#1B1A18</Color><Color x:Key="SidebarColor">#161513</Color>
+ <Color x:Key="SurfaceColor">#23221F</Color><Color x:Key="ElevatedColor">#2C2A27</Color>
+ <Color x:Key="TextColor">#EEECE8</Color><Color x:Key="MutedColor">#B6B0A7</Color>
+ <Color x:Key="AccentColor">#D97757</Color><Color x:Key="FocusColor">#E3A186</Color>
+ <Color x:Key="PrimaryColor">#D97757</Color><Color x:Key="PrimaryTextColor">#1B1511</Color>
+ <Color x:Key="SelectedColor">#49372E</Color><Color x:Key="LineColor">#45413B</Color>
+ <Color x:Key="HoverColor">#33302C</Color><Color x:Key="SuccessColor">#A0C8AD</Color>
+ <Color x:Key="DangerColor">#F1A49C</Color><Color x:Key="WaitingColor">#E5BE7B</Color>
+</ResourceDictionary>

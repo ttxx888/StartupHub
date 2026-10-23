@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+ <PropertyGroup><OutputType>WinExe</OutputType><TargetFramework>net10.0-windows</TargetFramework><UseWPF>true</UseWPF><UseWindowsForms>true</UseWindowsForms><Nullable>enable</Nullable><ImplicitUsings>disable</ImplicitUsings><AssemblyName>StartupHub</AssemblyName><ApplicationManifest>app.manifest</ApplicationManifest></PropertyGroup>
+ <PropertyGroup><ApplicationIcon>../../assets/startuphub.ico</ApplicationIcon></PropertyGroup>
+ <ItemGroup><ProjectReference Include="../StartupHub.Core/StartupHub.Core.csproj" /><Resource Include="../../assets/startuphub.ico" Link="assets/startuphub.ico"/><Resource Include="../../assets/startuphub.png" Link="assets/startuphub.png"/><Content Include="../../assets/startuphub.ico" Link="assets/startuphub.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest"/></ItemGroup>
+ <ItemGroup><Content Include="../../docs/third-party-notices.md" Link="third-party-notices.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" /></ItemGroup>
+</Project>
