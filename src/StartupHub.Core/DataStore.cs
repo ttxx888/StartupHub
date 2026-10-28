@@ -104,6 +104,12 @@ public sealed class DataStore
                 SuppressOutput = kind == "dsh",
                 HealthCodes = old.TryGetProperty("HealthCodes", out var codes) ? codes.EnumerateArray().Select(x => x.GetInt32()).ToList() : [200, 204, 301, 302, 401, 403, 404]
             };
+            if (e.Name == "FreeLLMAPI")
+            {
+                e.ManagedPidFile = System.IO.Path.Combine(e.WorkingDir, "data", "freellmapi.pid");
+                e.ProcessMatch = "server/dist/index.js";
+                e.ExternalLogs = [System.IO.Path.Combine(e.WorkingDir, "logs", "server.out.log"), System.IO.Path.Combine(e.WorkingDir, "logs", "server.err.log")];
+            }
             var dep = Text(old, "DependsOn");
             if (dep.Length > 0) dependencies[e.Id] = dep;
             config.Entries.Add(e);

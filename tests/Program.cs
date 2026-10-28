@@ -84,16 +84,48 @@ await Check("批量管理：分类顺序、解除依赖、原配置和文件保�
 await Check("智能入口：网址、程序、脚本、文件和网址快捷方式", () =>
 {
     Assert(TaskEntrance.Parse("https://example.com/tool?q=1").Kind == TaskKind.Url && TaskEntrance.Parse("https://example.com/tool?q=1").SuggestedName == "example.com", "网址未识别");
-    Assert(TaskEntrance.Parse("  \"C:\\工具 文件\\我的程序.EXE\"  ") == new TaskEntrance(TaskKind.Desktop, "C:\\工具 文件\\我的程序.EXE", "我的程序"), "程序路径或名称不正确");
-    foreach (var ext in new[] { ".ps1", ".bat", ".cmd", ".py", ".js", ".mjs", ".cjs" }) Assert(TaskEntrance.Parse("C:\\run" + ext).Kind == TaskKind.Script, "脚本类型未识别：" + ext);
-    Assert(TaskEntrance.Parse("C:\\小游戏\\index.html").Kind == TaskKind.File && TaskEntrance.Parse("C:\\文档\\简历.docx").SuggestedName == "简历", "普通文件未识别");
-    Assert(TaskEntrance.Parse("C:\\应用.lnk").Kind == TaskKind.Desktop, "桌面快捷方式未识别");
+    Assert(TaskEntrance.Parse("  \"F:\\工具 文件\\我的程序.EXE\"  ") == new TaskEntrance(TaskKind.Desktop, "F:\\工具 文件\\我的程序.EXE", "我的程序"), "程序路径或名称不正确");
+    foreach (var ext in new[] { ".ps1", ".bat", ".cmd", ".py", ".js", ".mjs", ".cjs" }) Assert(TaskEntrance.Parse("F:\\run" + ext).Kind == TaskKind.Script, "脚本类型未识别：" + ext);
+    Assert(TaskEntrance.Parse("F:\\小游戏\\index.html").Kind == TaskKind.File && TaskEntrance.Parse("F:\\文档\\简历.docx").SuggestedName == "简历", "普通文件未识别");
+    Assert(TaskEntrance.Parse("F:\\应用.lnk").Kind == TaskKind.Desktop, "桌面快捷方式未识别");
     var shortcut = Path.Combine(root, "示例网址.url"); File.WriteAllText(shortcut, "[InternetShortcut]\nURL=https://example.com/start\n");
     Assert(TaskEntrance.Parse(shortcut) == new TaskEntrance(TaskKind.Url,"https://example.com/start","示例网址"), "网址快捷方式未解析");
     Assert(TaskEntrance.Parse("").SuggestedName == "", "空入口生成了名称");
     return Task.CompletedTask;
 });
 
+await Check("旧配置导入：16 项、3 分类、2 项自启与特殊配置", () =>
+{
+    var legacyRoot = Path.Combine(root, "legacy-fixture"); Directory.CreateDirectory(legacyRoot);
+    string[] names = ["FreeLLMAPI", "WorkBuddy2API", "AstrBot", "DeepSeek Harness", "Zotero PDF2zh", "OpenViking 记忆库"];
+    string[] groups = ["服务", "工具", "网页"];
+    var legacyEntries = Enumerable.Range(0, 16).Select(i => new Dictionary<string, object>
+    {
+        ["Name"] = i < names.Length ? names[i] : "迁移任务" + i,
+        ["Group"] = groups[i % groups.Length],
+        ["Kind"] = i == 3 ? "dsh" : i == 4 ? "cmd" : i == 5 ? "url" : "service",
+        ["Path"] = i >= 13 ? Path.Combine(legacyRoot, "missing-" + i + ".exe") : Environment.ProcessPath!,
+        ["WorkingDir"] = legacyRoot,
+        ["Url"] = i == 5 ? "https://example.com/" : "",
+        ["WaitSeconds"] = i == 2 ? 60 : 20,
+        ["DependsOn"] = i == 2 ? "FreeLLMAPI" : ""
+    }).ToArray();
+    var legacyPath = Path.Combine(legacyRoot, "launcher.json");
+    File.WriteAllText(legacyPath, JsonSerializer.Serialize(new { Groups = groups.Select(name => new { Name = name }), Entries = legacyEntries }, DataStore.Json));
+    File.WriteAllText(Path.Combine(legacyRoot, "launcher.state.json"), JsonSerializer.Serialize(new { AutoStart = new[] { "FreeLLMAPI", "WorkBuddy2API" } }, DataStore.Json));
+    var imported = DataStore.ImportLegacy(legacyPath);
+    Assert(imported.Entries.Count == 16 && imported.Groups.Count == 3, "条目或分类数不符");
+    Assert(imported.Entries.Where(x => x.AutoStart).Select(x => x.Name).Order().SequenceEqual(new[] { "FreeLLMAPI", "WorkBuddy2API" }), "自启选择改变");
+    var astr = imported.Entries.Single(x => x.Name == "AstrBot");
+    Assert(astr.WaitSeconds == 60 && astr.DependsOn == imported.Entries.Single(x => x.Name == "FreeLLMAPI").Id, "依赖丢失");
+    Assert(imported.Entries.Single(x => x.Name == "DeepSeek Harness").OpensOwnBrowser, "DSH 浏览器策略丢失");
+    Assert(imported.Entries.Single(x => x.Name == "Zotero PDF2zh").VisibleConsole, "PDF2zh 控制台丢失");
+    Assert(imported.Entries.Single(x => x.Name == "OpenViking 记忆库").Kind == TaskKind.Url, "书签被转为服务");
+    Assert(imported.Entries.Count(x => TaskEngine.Missing(x) != null) == 3, "缺失入口数量不符");
+    var target = new DataStore(Path.Combine(root, "migration")); target.ReplaceConfig(imported);
+    Assert(DataStore.ReadExport(Path.Combine(target.Root, "config.json")).Entries.Select(x => x.Id).SequenceEqual(imported.Entries.Select(x => x.Id)), "ID 未保留");
+    return Task.CompletedTask;
+});
 await Check("依赖循环与缺失前置任务被拒绝", () =>
 {
     var a = Service(0); var b = Service(0); a.DependsOn = b.Id; b.DependsOn = a.Id;

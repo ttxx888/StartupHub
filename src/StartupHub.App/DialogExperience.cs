@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -38,6 +39,16 @@ public static class DialogExperience
         IInputElement? previousFocus = null;
         window.Loaded += (_, _) =>
         {
+            var screen=System.Windows.Forms.Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(window).Handle).WorkingArea;
+            var transform=PresentationSource.FromVisual(window)?.CompositionTarget?.TransformFromDevice ?? System.Windows.Media.Matrix.Identity;
+            var size=transform.Transform(new Vector(screen.Width,screen.Height));
+            window.MinWidth=Math.Min(window.MinWidth,size.X);window.MinHeight=Math.Min(window.MinHeight,size.Y);
+            window.MaxWidth=size.X;window.MaxHeight=size.Y;
+            foreach(var button in DialogLayout.Descendants(window).OfType<Button>()) {
+                if(string.IsNullOrEmpty(AutomationProperties.GetName(button)) && button.Content is string label) AutomationProperties.SetName(button,label);
+                ToolTipService.SetShowOnDisabled(button,true);
+                ToolTipService.SetShowsToolTipOnKeyboardFocus(button,true);
+            }
             previousFocus = window.Owner != null ? FocusManager.GetFocusedElement(window.Owner) : null;
             window.Dispatcher.BeginInvoke(() =>
             {

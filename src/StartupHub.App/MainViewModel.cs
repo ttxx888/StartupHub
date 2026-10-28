@@ -106,6 +106,12 @@ public sealed class MainViewModel : Observable
     }
     private void UpdatePresentation() { Changed(nameof(IsEmpty)); Changed(nameof(HasNoTasks)); Changed(nameof(HasTasks)); Changed(nameof(EmptyTitle)); Changed(nameof(EmptyDescription)); Changed(nameof(BatchActive)); Changed(nameof(CanArrange)); Changed(nameof(DetailFields)); }
     public string[] Filters { get; } = ["全部状态", "运行中", "未启动", "需要处理", "登录自启"];
+    public Choice<string>[] FilterOptions => Filters.Select(value => new Choice<string>(value, value switch
+    {
+        "需要处理" => "异常或已跳过",
+        "登录自启" => "已勾选登录自启",
+        _ => value
+    })).ToArray();
     public ICollectionView TasksView { get; }
     private string search = "", group = "全部任务", filter = "全部状态", message = "手动打开不会执行自启清单。", logText = "请选择任务查看日志。";
     public string Search { get => search; set { if (search == value) return; search = value; Changed(); FilterChanged(); } }
@@ -169,6 +175,7 @@ public sealed class MainViewModel : Observable
     public ICommand DiscoverCommand { get; }
     public ICommand LogsCommand { get; }
     public ICommand LogFolderCommand { get; }
+    public ICommand MoveToTopCommand { get; }
     public ICommand UpCommand { get; }
     public ICommand DownCommand { get; }
     private ActionCommand Command(Action action, Func<bool>? can = null) => new(() => { action(); return Task.CompletedTask; }, can);
@@ -196,6 +203,7 @@ public sealed class MainViewModel : Observable
         SettingsCommand = Command(() => { new SettingsWindow(store) { Owner = Application.Current.MainWindow }.ShowDialog(); Reload(); });
         DiscoverCommand = new ActionCommand(Discover, () => !IsDiscovering);
         LogsCommand = Command(RefreshLogs); LogFolderCommand = Command(() => NativeProcess.Open(store.Logs)?.Dispose());
+        MoveToTopCommand = Command(MoveToTop, () => HasSelection() && CanArrange && store.Config.Entries.FirstOrDefault()?.Id != Selected?.Entry.Id);
         UpCommand = Command(() => Move(-1), HasSelection); DownCommand = Command(() => Move(1), HasSelection);
         engine.StatusChanged += (id, status) => Application.Current.Dispatcher.BeginInvoke(() =>
         {
@@ -341,6 +349,11 @@ public sealed class MainViewModel : Observable
         Message = $"已将 {selectedIds.Count} 项移入“{destination}”。";
         return true;
     }
+    private void MoveToTop()
+    {
+        if (Selected is not { } selected || store.Config.Entries.FirstOrDefault() is not { } first) return;
+        if (ReorderTask(selected.Entry.Id, first.Id, false)) Message = "已置顶：" + selected.Entry.Name;
+    }
     private void Move(int offset)
     {
         var entry = Selected!.Entry; var i = store.Config.Entries.IndexOf(entry); var next = i + offset;
@@ -396,10 +409,10 @@ public sealed class MainViewModel : Observable
     {
         await RefreshAsync();
         var entries = Rows.Where(x => x.Entry.Kind == TaskKind.File && TaskEngine.Missing(x.Entry) == null || x.Entry.Url.Length > 0 && (x.Entry.Kind == TaskKind.Url || x.Status.Status == RunStatus.Running)).Select(x => x.Entry).ToArray();
-        if (entries.Length == 0) { Message = "没有可打开的页面。"; return; }
-        if (!DialogExperience.Confirm(Application.Current.MainWindow, "打开可用页面", $"将使用默认浏览器打开 {entries.Length} 个页面。", "打开页面")) return;
+        if (entries.Length == 0) { Message = "清单中没有可打开的网页或文件。"; return; }
+        if (!DialogExperience.Confirm(Application.Current.MainWindow, "打开全部网页和文件", $"将使用默认应用打开清单中 {entries.Length} 个网页或文件，包含其他分类和筛选隐藏的任务。", "全部打开")) return;
         foreach (var e in entries) engine.OpenPage(e);
-        Message = $"已打开 {entries.Length} 个页面。";
+        Message = $"已打开 {entries.Length} 个网页或文件。";
     }
     private async Task StopAll()
     {

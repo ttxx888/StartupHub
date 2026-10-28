@@ -28,6 +28,7 @@ public partial class MainWindow
     private AdornerLayer? markerLayer;
     private DispatcherTimer? dragScrollTimer;
     private int scrollDirection;
+    private const double TaskDragScrollEdge = 48;
 
     private static T? Ancestor<T>(DependencyObject? source) where T : DependencyObject
     {
@@ -163,22 +164,28 @@ public partial class MainWindow
         lastDragPoint = e.GetPosition(TaskList);
         dragScrollHost = TaskList;
         UpdateListFeedback(id, lastDragPoint);
-        scrollDirection = lastDragPoint.Y < 28 ? -1 : lastDragPoint.Y > TaskList.ActualHeight - 28 ? 1 : 0;
+        scrollDirection = lastDragPoint.Y < TaskDragScrollEdge ? -1 : lastDragPoint.Y > TaskList.ActualHeight - TaskDragScrollEdge ? 1 : 0;
         if (scrollDirection != 0)
         {
-            dragScrollTimer ??= NewScrollTimer(); dragScrollTimer.Start();
+            dragScrollTimer ??= NewScrollTimer(); dragScrollTimer.Interval=TimeSpan.FromMilliseconds(33); dragScrollTimer.Start();
         }
         else dragScrollTimer?.Stop();
         if (ListDropTarget(lastDragPoint) is { } target && target.Row.Entry.Id != id) e.Effects = DragDropEffects.Move;
     }
     private DispatcherTimer NewScrollTimer()
     {
-        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(140) };
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(33) };
         timer.Tick += (_, _) =>
         {
             var host = dragScrollHost ?? TaskList;
             var scroll = Descendant<ScrollViewer>(host);
-            if (scrollDirection < 0) scroll?.LineUp(); else if (scrollDirection > 0) scroll?.LineDown();
+            if (host == TaskList && scroll != null && scrollDirection != 0)
+            {
+                double distance = scrollDirection < 0 ? lastDragPoint.Y : host.ActualHeight - lastDragPoint.Y;
+                double proximity = Math.Clamp(1 - distance / TaskDragScrollEdge, 0, 1);
+                scroll.ScrollToVerticalOffset(scroll.VerticalOffset + scrollDirection * (8 + 32 * proximity));
+            }
+            else if (scrollDirection < 0) scroll?.LineUp(); else if (scrollDirection > 0) scroll?.LineDown();
             host.UpdateLayout();
             if (host == TaskList && activeDrag is { } id) UpdateListFeedback(id, lastDragPoint);
             if (host == CategoryList && activeCategory != null) UpdateCategoryFeedback(activeCategory, lastDragPoint);
@@ -235,7 +242,7 @@ public partial class MainWindow
             lastDragPoint = e.GetPosition(CategoryList); dragScrollHost = CategoryList;
             if (UpdateCategoryFeedback(name, lastDragPoint, e.OriginalSource as DependencyObject)) e.Effects = DragDropEffects.Move;
             scrollDirection = lastDragPoint.Y < 24 ? -1 : lastDragPoint.Y > CategoryList.ActualHeight - 24 ? 1 : 0;
-            if (scrollDirection != 0) { dragScrollTimer ??= NewScrollTimer(); dragScrollTimer.Start(); }
+            if (scrollDirection != 0) { dragScrollTimer ??= NewScrollTimer(); dragScrollTimer.Interval=TimeSpan.FromMilliseconds(140); dragScrollTimer.Start(); }
             return;
         }
         var item = Ancestor<ListBoxItem>(e.OriginalSource as DependencyObject);

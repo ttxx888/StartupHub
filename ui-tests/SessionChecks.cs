@@ -8,6 +8,15 @@ using StartupHub.Core;
 
 internal static class SessionChecks
 {
+    private static void Await(Task task)
+    {
+        if(!task.IsCompleted) {
+            var frame=new DispatcherFrame();
+            task.ContinueWith(_=>Application.Current.Dispatcher.BeginInvoke(()=>frame.Continue=false),TaskScheduler.Default);
+            Dispatcher.PushFrame(frame);
+        }
+        task.GetAwaiter().GetResult();
+    }
     public static void Run(MainWindow window, MainViewModel vm, DataStore store, TaskEngine engine, Action<bool,string> check)
     {
         string path = Path.Combine(store.Root,"打开验证.lnk");
@@ -32,11 +41,11 @@ internal static class SessionChecks
         check(!window.IsVisible && engine.Status(file.Id).Status==RunStatus.Opened,"关闭窗口收进托盘保留已打开");
         window.ShowFromTray(); Pump();
         check(window.IsVisible && vm.Selected.Status.Status==RunStatus.Opened,"托盘恢复保留已打开和选择");
-        engine.RefreshAsync().GetAwaiter().GetResult(); Pump();
+        Await(engine.RefreshAsync()); Pump();
         check(vm.Selected.Status.Status==RunStatus.Opened && vm.DetailText.Contains("已交给默认应用打开"),"普通刷新保留列表与详情状态");
         var restored = new DataStore(store.Root);
         using var fresh = new TaskEngine(restored);
-        fresh.RefreshAsync().GetAwaiter().GetResult();
+        Await(fresh.RefreshAsync());
         var freshVm = new MainViewModel(restored,fresh);
         freshVm.Selected = freshVm.Rows.Single(x=>x.Entry.Id==file.Id);
         check(freshVm.Selected.Status.Status==RunStatus.Stopped && freshVm.DetailFields.Any(x=>x.Value=="可直接打开"),"新会话列表和详情回到可打开状态");

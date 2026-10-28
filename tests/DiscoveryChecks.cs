@@ -45,11 +45,11 @@ internal static class DiscoveryChecks
             var mislabeled=Serve(_=>Page("<!doctype html><html><title>可用网页</title></html>","application/octet-stream"));
             var noType=Serve(_=>Page("<html><title>无内容类型</title></html>").Replace("Content-Type: text/html; charset=utf-8\r\n",""));
             var panel=Serve(path=>path=="/panel/"?Page("<title>控制台</title>"):Page("not found","text/plain",404));
-            var desktopPage=Serve(_=>Page("<title>Desktop</title><div id='root'></div>"),"sample desktop app");
+            var desktopPage=Serve(_=>Page("<title>Ollama</title><div id='root'></div>"),"ollama app");
             var known=Serve(_=>Page("<title>已有网址</title>"));
             var portKnown=Serve(_=>Page("<title>已有端口</title>"));
-            var excluded=Serve(_=>Page("<title>不应访问</title>"),"sample_mcp.one");
-            var godot=Serve(_=>Page("<title>不应访问</title>"),"sample_mcp.two");
+            var excluded=Serve(_=>Page("<title>不应访问</title>"),"obsidian_rag.server");
+            var godot=Serve(_=>Page("<title>不应访问</title>"),"godot_mcp");
             var alias=Serve(_=>Redirect($"http://localhost:{html.Port}/"));
             var local=Serve(path=>path=="/"?Redirect("/home"):Page("<title>本地重定向</title>"));
             var loop=Serve(_=>Redirect("/loop"));
@@ -68,7 +68,7 @@ internal static class DiscoveryChecks
             check(results.Single(x=>x.Port==local.Port).Url.EndsWith("/home"),"未保留重定向最终地址");
             check(known.Requests==1 && results.Any(x=>x.Port==known.Port && new Uri(x.Url).AbsolutePath=="/") && portKnown.Requests==0 && excluded.Requests==0 && godot.Requests==0,"已有子路径误排除整个端口，或排除的服务被访问");
             check(results.Any(x=>x.Port==panel.Port && x.Url.EndsWith("/panel/")) && results.Any(x=>x.Port==mislabeled.Port) && results.Any(x=>x.Port==noType.Port),"控制台子路径或错误、缺失内容类型的 HTML 被漏掉");
-            check(desktopPage.Requests==0 && results.All(x=>x.Port!=desktopPage.Port),"桌面程序内部页面被当成浏览器网页");
+            check(desktopPage.Requests==0 && results.All(x=>x.Port!=desktopPage.Port),"桌面内部 Ollama 页面被当成浏览器网页");
             check(loop.Requests<=24 && remote.Requests<=4,"循环或外部跳转未停止");
             check(progress.First().Completed==0 && progress.Last().Completed==progress.Last().Total,"扫描进度未完整报告");
             var aliases=new[] {new DiscoveredPage("甲",$"http://127.0.0.1:{html.Port}/",html.Port,1)};

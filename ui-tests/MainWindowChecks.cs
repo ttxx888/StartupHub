@@ -4,6 +4,9 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -109,8 +112,33 @@ internal static class MainWindowChecks
         check(list.EnableRowVirtualization && VirtualizingPanel.GetIsVirtualizing(list) && ScrollViewer.GetCanContentScroll(list), "任务列表保留行虚拟化及兼容虚拟化的内容滚动");
         var bindings = window.InputBindings.OfType<KeyBinding>().ToArray();
         check(bindings.Any(x => x.Key == Key.N && x.Modifiers == ModifierKeys.Control && ReferenceEquals(x.Command,vm.AddCommand)) && bindings.Any(x => x.Key == Key.E && x.Modifiers == ModifierKeys.Control && ReferenceEquals(x.Command,vm.EditCommand)) && bindings.Any(x => x.Key == Key.F5 && ReferenceEquals(x.Command,vm.RefreshCommand)), "Ctrl+N、Ctrl+E 和 F5 保留原有命令绑定");
+        vm.ClearFiltersCommand.Execute(null);
+        var statusBox=(ComboBox)window.FindName("StatusFilterBox");
+        string filterConfig=File.ReadAllText(Path.Combine(store.Root,"config.json"));
+        var statuses=new[]{RunStatus.Failed,RunStatus.Missing,RunStatus.Occupied,RunStatus.Skipped};
+        for(int i=0;i<statuses.Length;i++)vm.Rows[i].Status=new StartupHub.Core.TaskStatus(statuses[i]);
+        statusBox.SelectedItem=statusBox.Items.Cast<Choice<string>>().Single(x=>x.Label=="异常或已跳过");Settle(window);
+        check(list.Items.Cast<TaskRow>().Select(x=>x.Entry.Id).ToHashSet().SetEquals(vm.Rows.Take(4).Select(x=>x.Entry.Id)),"异常筛选包含失败、缺失、占用和已跳过任务");
+        statusBox.IsDropDownOpen=true;Settle(window);
+        Capture((FrameworkElement)((Popup)statusBox.Template.FindName("PART_Popup",statusBox)).Child,Path.Combine(root,"task-filter-labels.png"));statusBox.IsDropDownOpen=false;
+        statusBox.SelectedItem=statusBox.Items.Cast<Choice<string>>().Single(x=>x.Label=="已勾选登录自启");Settle(window);
+        check(list.Items.Cast<TaskRow>().Select(x=>x.Entry.Id).ToHashSet().SetEquals(vm.Rows.Where(x=>x.AutoStart).Select(x=>x.Entry.Id)) && vm.StatusFilter=="登录自启","新自启筛选名称保留原有筛选值和勾选结果");
+        check(File.ReadAllText(Path.Combine(store.Root,"config.json"))==filterConfig,"切换筛选不修改任务或登录自启配置");
+        var menuButton=Buttons(window).Single(x=>Equals(x.Content,"清单操作"));menuButton.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));Settle(window);
+        Capture(menuButton.ContextMenu,Path.Combine(root,"list-action-labels.png"));menuButton.ContextMenu.IsOpen=false;
     }
 
+    private static void Capture(FrameworkElement visual,string path)
+    {
+        visual.UpdateLayout();
+        var image=new RenderTargetBitmap((int)Math.Ceiling(visual.ActualWidth),(int)Math.Ceiling(visual.ActualHeight),96,96,PixelFormats.Pbgra32);image.Render(visual);
+        var encoder=new PngBitmapEncoder();encoder.Frames.Add(BitmapFrame.Create(image));using var stream=File.Create(path);encoder.Save(stream);
+    }
+    private static IEnumerable<Button> Buttons(DependencyObject root)
+    {
+        if(root is Button button)yield return button;
+        for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++)foreach(var child in Buttons(VisualTreeHelper.GetChild(root,i)))yield return child;
+    }
     private static DragEventArgs DragEvent(IDataObject data, DependencyObject target, Point point, RoutedEvent routed)
     {
         var result = (DragEventArgs)Activator.CreateInstance(typeof(DragEventArgs),BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public,null,[data,DragDropKeyStates.LeftMouseButton,DragDropEffects.Move,target,point],null)!;

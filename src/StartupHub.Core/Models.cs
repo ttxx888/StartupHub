@@ -27,8 +27,8 @@ public sealed class TaskEntry
     public int StartDelaySeconds { get; set; }
     public string DirectProbeUrl { get; set; } = "";
     public string DirectExpectedContent { get; set; } = "";
-    public string ProxyUrl { get; set; } = "";
-    public string ProxyProbeUrl { get; set; } = "";
+    public string ProxyUrl { get; set; } = "http://127.0.0.1:7897";
+    public string ProxyProbeUrl { get; set; } = "https://chatgpt.com/";
     public bool AutoLogin { get; set; } = true;
     public bool AutoStart { get; set; }
     public bool OpenPageOnAutoStart { get; set; }

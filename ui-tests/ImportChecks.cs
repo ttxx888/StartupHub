@@ -22,7 +22,7 @@ internal static class ImportChecks
         string Saved()=>File.ReadAllText(Path.Combine(store.Root,"config.json"));
         T Field<T>(object obj,string name)=>(T)obj.GetType().GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(obj)!;
         var before=Saved();
-        Interact<EntryEditor>(()=>vm.ImportFiles([first]),e=>{check(e.Title=="添加任务" && Field<TextBox>(e,"name").Text=="文档甲","单项拖入打开预填的新建表单");e.Close();});
+        Interact<EntryEditor>(()=>vm.ImportFiles([first]),e=>{check(e.Title=="添加任务" && Field<TextBox>(e,"name").Text=="文档甲","单项拖入打开预填的新建表单");Cancel(e);});
         check(Saved()==before,"取消单项导入不修改配置");
         Interact<EntryEditor>(()=>vm.ImportFiles([first]),e=>{Field<TextBox>(e,"name").Text="我的文档";Click(e,"保存任务");});
         check(store.Config.Entries.Count==1 && store.Config.Entries[0].Name=="我的文档" && store.Config.Entries[0].Group=="开发网页" && !store.Config.Entries[0].AutoStart,"单项导入可编辑名称并继承当前分类，默认不自启");
@@ -31,7 +31,7 @@ internal static class ImportChecks
         {
             var rows=Field<ImportTaskRow[]>(e,"rows");check(rows.Length==5 && rows.Count(x=>x.CanSelect)==3 && rows.Count(x=>x.Selected)==3,"多项预览展示有效、重复和无效项并默认只选择可添加项");
             check(rows.Single(x=>x.Source==missing).Issue.Length>0 && !rows.Single(x=>x.Source==first).Selected,"重复和无效项有说明且不能选入");
-            Snapshot(e,root,"import-preview.png");e.Width=650;e.Dispatcher.Invoke(()=>{},DispatcherPriority.ContextIdle);Snapshot(e,root,"import-narrow.png");e.Close();
+            Snapshot(e,root,"import-preview.png");e.Width=650;e.Dispatcher.Invoke(()=>{},DispatcherPriority.ContextIdle);Snapshot(e,root,"import-narrow.png");Cancel(e);
         });
         check(Saved()==before,"取消批量预览不修改配置");
         Interact<ImportTasksWindow>(()=>vm.ImportFiles([second,link,url,first,missing]),e=>
@@ -54,7 +54,7 @@ internal static class ImportChecks
         window.Dispatcher.BeginInvoke(()=>
         {
             var editor=Application.Current.Windows.OfType<EntryEditor>().Single();
-            try {Click(editor,"保存任务");}catch(Exception ex){dropError=ex;editor.Close();}
+            try {Click(editor,"保存任务");}catch(Exception ex){dropError=ex;Cancel(editor);}
         },DispatcherPriority.ApplicationIdle);
         var drop=Event(data,panel,DragDrop.DropEvent);panel.RaiseEvent(drop);window.Dispatcher.Invoke(()=>{},DispatcherPriority.ContextIdle);
         if(dropError!=null)throw dropError;
@@ -64,7 +64,7 @@ internal static class ImportChecks
         before=Saved();
         Interact<ImportTasksWindow>(()=>vm.ImportFiles([missing,missing]),e=>
         {
-            check(!Descendants<Button>(e).Single(x=>x.Content?.ToString()=="添加所选").IsEnabled,"全部无效时禁用添加并保留问题说明");e.Close();
+            check(!Descendants<Button>(e).Single(x=>x.Content?.ToString()=="添加所选").IsEnabled,"全部无效时禁用添加并保留问题说明");Cancel(e);
         });
         check(Saved()==before,"全部无效的导入不修改配置");
         var network=new TaskEntry {Name="等待网络",Kind=TaskKind.Network,Url="http://127.0.0.1:1/",DirectProbeUrl="http://127.0.0.1:1/",ProxyUrl="http://127.0.0.1:1",ProxyProbeUrl="https://127.0.0.1:1/",WaitSeconds=1,AutoStart=true};
@@ -78,9 +78,10 @@ internal static class ImportChecks
     private static void Interact<T>(Action invoke,Action<T> action) where T:Window
     {
         Exception? error=null;
-        Application.Current.Dispatcher.BeginInvoke(()=>{var dialog=Application.Current.Windows.OfType<T>().Single();try{action(dialog);}catch(Exception ex){error=ex;dialog.Close();}},DispatcherPriority.ApplicationIdle);
+        Application.Current.Dispatcher.BeginInvoke(()=>{var dialog=Application.Current.Windows.OfType<T>().Single();try{action(dialog);}catch(Exception ex){error=ex;Cancel(dialog);}},DispatcherPriority.ApplicationIdle);
         invoke();if(error!=null)throw error;
     }
+    private static void Cancel(Window window) { DialogLayout.Descendants(window).OfType<Button>().First(x=>x.IsCancel).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));window.Close(); }
     private static void Click(Window window,string text)=>Descendants<Button>(window).Single(x=>x.Content?.ToString()==text).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     private static IEnumerable<T> Descendants<T>(DependencyObject parent) where T:DependencyObject
     {

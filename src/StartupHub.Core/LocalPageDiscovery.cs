@@ -13,7 +13,6 @@ public sealed record DiscoveryReport(List<DiscoveredPage> Pages, List<DiscoveryI
 
 public static class LocalPageDiscovery
 {
-    private static readonly string[] DesktopAppProcessMarkers=["sample desktop app","sample_mcp"];
     private static bool Local(Uri uri) => uri.Scheme is "http" or "https" && uri.IsLoopback;
     private static string AddressKey(Uri uri) => new UriBuilder(uri) { Host=uri.IsLoopback?"localhost":uri.Host, Fragment="" }.Uri.AbsoluteUri;
     public static List<DiscoveredPage> ExcludeExisting(IEnumerable<DiscoveredPage> pages, IEnumerable<TaskEntry> entries)
@@ -45,7 +44,8 @@ public static class LocalPageDiscovery
             .DistinctBy(e=>(e.Address,e.Port,e.Pid)).ToArray();
         var localAddresses=NetworkInterface.GetAllNetworkInterfaces().SelectMany(n=>n.GetIPProperties().UnicastAddresses).Select(a=>a.Address.ToString()).Concat(endpoints.Select(e=>e.Address)).ToHashSet(StringComparer.OrdinalIgnoreCase);
         bool LocalTarget(Uri uri)=>Local(uri)||(uri.Scheme is "http" or "https" && IPAddress.TryParse(uri.DnsSafeHost,out var address)&&localAddresses.Contains(address.ToString()));
-        bool Excluded(ListenerEndpoint e)=>snapshot.Processes.TryGetValue(e.Pid,out var p)&&DesktopAppProcessMarkers.Any(m=>p.CommandLine.Contains(m,StringComparison.OrdinalIgnoreCase)||p.Name.Contains(m,StringComparison.OrdinalIgnoreCase)||p.Path.Contains(m,StringComparison.OrdinalIgnoreCase));
+        bool Excluded(ListenerEndpoint e)=>snapshot.Processes.TryGetValue(e.Pid,out var p)&&
+            (p.CommandLine.Contains("obsidian_rag",StringComparison.OrdinalIgnoreCase)||p.CommandLine.Contains("godot_mcp",StringComparison.OrdinalIgnoreCase)||p.Name.Equals("ollama app.exe",StringComparison.OrdinalIgnoreCase)||Path.GetFileName(p.Path).Equals("ollama app.exe",StringComparison.OrdinalIgnoreCase));
         Uri EndpointUri(ListenerEndpoint e,string scheme)=>new UriBuilder(scheme,e.Address,e.Port).Uri;
         var issues=new ConcurrentBag<DiscoveryIssue>();var pages=new ConcurrentBag<DiscoveredPage>();
         var tlsFailures=new ConcurrentDictionary<string,string>();

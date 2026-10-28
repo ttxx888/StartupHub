@@ -44,8 +44,10 @@ public sealed class ImportTasksWindow : Window
         group = new ComboBox { ItemsSource = groups.Count > 0 ? groups : new[] {"未分类"}, SelectedItem = initialGroup, Width = 180, Margin = new Thickness(0,0,0,8) };
         AutomationProperties.SetName(group,"导入分类");
         if (group.SelectedIndex < 0) group.SelectedIndex = 0;
-        options.Children.Add(group); top.Children.Add(options); DockPanel.SetDock(top,Dock.Top); dock.Children.Add(top);
+        top.Children.Add(options); DockPanel.SetDock(top,Dock.Top); dock.Children.Add(top);
         var footer = new DockPanel { Margin = new Thickness(0,16,0,0) };
+        var destination=new DockPanel {Margin=new Thickness(0,0,0,8)};DockPanel.SetDock(destination,Dock.Top);footer.Children.Add(destination);
+        destination.Children.Add(new TextBlock {Text="添加到分类",VerticalAlignment=VerticalAlignment.Center,Margin=new Thickness(0,0,12,0)});destination.Children.Add(group);
         var buttons = new StackPanel { Orientation = Orientation.Horizontal };
         var cancel = new Button { Content = "取消", IsCancel = true };
         var add = new Button { Content = "添加所选", IsDefault = true, Style = (Style)FindResource("PrimaryButton") };

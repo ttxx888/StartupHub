@@ -76,6 +76,66 @@ internal static class DragChecks
         check(System.Text.Json.JsonSerializer.Serialize(store.Config.Entries,DataStore.Json)==tasksBefore,"分类排序保留所有任务的顺序和归属");
         var cross=Event(data,list,new Point(10,10),DragDrop.DropEvent); list.RaiseEvent(cross);
         check(cross.Effects==DragDropEffects.None,"分类不能拖入任务列表");
+        var others=store.Config.Entries.Where(x=>x.Id!=c.Id).Select(x=>x.Id).ToArray();
+        vm.SelectedGroup="开发网页";vm.Search="共同";vm.Selected=vm.Rows.Single(x=>x.Entry.Id==c.Id);
+        window.SetDetails("show");window.UpdateLayout();
+        var more=VisualButtons(window).Single(x=>Equals(x.Content,"更多 ···"));
+        more.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var top=more.ContextMenu.Items.OfType<MenuItem>().Single(x=>Equals(x.Header,"置顶"));
+        check(top.Command?.CanExecute(null)==true,"任务更多操作提供可执行的置顶入口");
+        more.ContextMenu.UpdateLayout();
+        var menuImage=new System.Windows.Media.Imaging.RenderTargetBitmap((int)Math.Ceiling(more.ContextMenu.ActualWidth),(int)Math.Ceiling(more.ContextMenu.ActualHeight),96,96,PixelFormats.Pbgra32);
+        menuImage.Render(more.ContextMenu);
+        var encoder=new System.Windows.Media.Imaging.PngBitmapEncoder();encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(menuImage));
+        using(var output=File.Create(Path.Combine(store.Root,"move-to-top-menu.png"))) encoder.Save(output);
+        top.Command!.Execute(null);more.ContextMenu.IsOpen=false;
+        check(store.Config.Entries.First().Id==c.Id && vm.Selected?.Entry.Id==c.Id && vm.SelectedGroup=="开发网页" && vm.Search=="共同","筛选下置顶移到清单第一位并保留选择与筛选");
+        check(store.Config.Entries.Skip(1).Select(x=>x.Id).SequenceEqual(others) && c.Group=="开发网页" && b.DependsOn==a.Id,"置顶保留其余相对顺序、分类和依赖");
+        check(new DataStore(store.Root).Config.Entries.First().Id==c.Id,"重读配置保留置顶顺序");
+        check(!vm.MoveToTopCommand.CanExecute(null),"已位于第一位时禁用置顶");
+        var longList=Enumerable.Range(0,100).Select(i=>new TaskEntry {Name="滚动任务 "+i,Kind=TaskKind.Url,Url="https://example.com/"+i,Group="常用服务"}).ToList();
+        store.ReplaceConfig(new HubConfig {Entries=longList});vm.Search="";vm.SelectedGroup="全部任务";vm.Reload();window.UpdateLayout();Pump(150);
+        var scroll=VisualScrolls(list).First();
+        var scrollData=new DataObject("StartupHub.TaskId",longList[50].Id.ToString());
+        string beforeScroll=File.ReadAllText(Path.Combine(store.Root,"config.json"));
+        Point DragPoint(Point position) {
+            var origin=Event(scrollData,list,new Point(0,0),DragDrop.DragOverEvent).GetPosition(list);
+            var unit=Event(scrollData,list,new Point(1,1),DragDrop.DragOverEvent).GetPosition(list);
+            return new Point((position.X-origin.X)/(unit.X-origin.X),(position.Y-origin.Y)/(unit.Y-origin.Y));
+        }
+        double ScrollAt(double y) {
+            scroll.ScrollToVerticalOffset(1600);Pump(60);window.UpdateLayout();double start=scroll.VerticalOffset;
+            list.RaiseEvent(Event(scrollData,list,DragPoint(new Point(16,y)),DragDrop.DragOverEvent));Pump(280);
+            list.RaiseEvent(Event(scrollData,list,DragPoint(new Point(16,list.ActualHeight/2)),DragDrop.DragOverEvent));window.UpdateLayout();
+            return scroll.VerticalOffset-start;
+        }
+        double near=ScrollAt(1), outer=ScrollAt(44);
+        check(near < -120 && Math.Abs(near)>Math.Abs(outer)*1.6,"拖到上边缘快速滚动且越贴边越快");
+        double down=ScrollAt(list.ActualHeight-1);
+        File.WriteAllText(Path.Combine(store.Root,"drag-scroll-metrics.json"),System.Text.Json.JsonSerializer.Serialize(new {UpperEdgePixels=-near,UpperZoneOuterPixels=-outer,LowerEdgePixels=down,DurationMs=280},DataStore.Json));
+        check(down>120,"拖到下边缘快速滚动");
+        double stopped=scroll.VerticalOffset;Pump(120);
+        check(Math.Abs(scroll.VerticalOffset-stopped)<.5,"离开边缘后停止自动滚动");
+        scroll.ScrollToVerticalOffset(0);window.UpdateLayout();list.RaiseEvent(Event(scrollData,list,DragPoint(new Point(16,1)),DragDrop.DragOverEvent));Pump(120);
+        check(scroll.VerticalOffset==0,"到达列表顶部后保持边界");
+        list.RaiseEvent(Event(scrollData,list,DragPoint(new Point(16,list.ActualHeight/2)),DragDrop.DragOverEvent));
+        check(File.ReadAllText(Path.Combine(store.Root,"config.json"))==beforeScroll,"自动滚动不改变任务顺序与配置");
+    }
+    private static void Pump(int milliseconds)
+    {
+        var frame=new System.Windows.Threading.DispatcherFrame();var timer=new System.Windows.Threading.DispatcherTimer {Interval=TimeSpan.FromMilliseconds(milliseconds)};
+        timer.Tick+=(_,_)=>{timer.Stop();frame.Continue=false;};timer.Start();System.Windows.Threading.Dispatcher.PushFrame(frame);
+    }
+    private static IEnumerable<ScrollViewer> VisualScrolls(DependencyObject root)
+    {
+        if(root is ScrollViewer viewer) yield return viewer;
+        for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++) foreach(var child in VisualScrolls(VisualTreeHelper.GetChild(root,i))) yield return child;
+    }
+    private static IEnumerable<Button> VisualButtons(DependencyObject root)
+    {
+        if(root is Button button) yield return button;
+        for(int i=0;i<VisualTreeHelper.GetChildrenCount(root);i++)
+            foreach(var child in VisualButtons(VisualTreeHelper.GetChild(root,i))) yield return child;
     }
     private static DragEventArgs Event(IDataObject data, DependencyObject target, Point point, RoutedEvent routed)
     {
